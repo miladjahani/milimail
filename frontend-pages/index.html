@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Turbo Temp Mail | ایمیل موقت و ناشناس ۲۴ ساعته</title>
+  <meta name="description" content="سرویس ایمیل موقت و یک‌بار مصرف مبتنی بر Cloudflare Workers و GitHub Pages با دریافت زنده و انقضای خودکار ۲۴ ساعته">
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#020617">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./style.css">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between selection:bg-blue-600 selection:text-white">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800/80 bg-slate-900/50 backdrop-blur-md sticky top-0 z-30">
+    <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-blue-500/20">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-bold tracking-tight text-white">Turbo Mail</h1>
+            <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">v2.0</span>
+          </div>
+          <p class="text-xs text-slate-400">سرویس ایمیل موقت مبتنی بر Cloudflare Edge</p>
+        </div>
+      </div>
+
+      <!-- وضعیت اتصال و تنظیمات سریع -->
+      <div class="flex items-center gap-2">
+        <div id="liveBadge" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-800/60 text-emerald-400 text-xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>اتصال زنده</span>
+        </div>
+        <button id="soundToggleBtn" onclick="toggleSound()" title="صدای اعلان" class="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 transition">
+          <svg id="soundIconOn" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-4xl w-full mx-auto px-4 py-6 flex-1 space-y-6">
+
+    <!-- کارت مدیریت صندوق ایمیل -->
+    <section class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl shadow-black/40 backdrop-blur-sm relative overflow-hidden">
+      <div class="absolute -top-24 -right-24 w-48 h-48 bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-200">آدرس صندوق ورودی فعال</h2>
+          <p class="text-xs text-slate-400">می‌توانید از آدرس پیشنهادی استفاده کنید یا شناسه دلخواه بسازید.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-400">انقضا:</span>
+          <span id="countdownTimer" class="font-mono text-xs font-semibold text-amber-400 bg-amber-950/40 border border-amber-800/40 px-2 py-0.5 rounded-md">24:00:00</span>
+        </div>
+      </div>
+
+      <!-- کنترل بار ورودی ایمیل -->
+      <div class="flex flex-col sm:flex-row gap-2">
+        <div class="flex-1 flex rounded-xl bg-slate-950 border border-slate-800 focus-within:border-blue-500 transition overflow-hidden">
+          <input id="customUsernameInput" type="text" placeholder="نام کاربری دلخواه (اختیاری)" dir="ltr"
+            class="w-full bg-transparent px-3 py-2.5 text-sm text-slate-200 focus:outline-none font-mono">
+          <span class="flex items-center text-slate-500 px-1 font-mono">@</span>
+          <select id="domainSelect" dir="ltr" class="bg-transparent text-slate-300 text-sm px-2 py-2.5 focus:outline-none border-r border-slate-800 font-mono cursor-pointer">
+            <option value="yourdomain.com">yourdomain.com</option>
+          </select>
+        </div>
+
+        <div class="flex gap-2">
+          <button onclick="applyCustomEmail()" class="flex-1 sm:flex-none px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/20">
+            <span>تغییر / ثبت</span>
+          </button>
+          <button onclick="generateRandomEmail()" class="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium transition flex items-center justify-center gap-1" title="تولید آدرس تصادفی">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            <span>تصادفی</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- آدرس فعال و کلیدهای عملیات سریع -->
+      <div class="mt-4 pt-4 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-400">آدرس فعال:</span>
+          <code id="activeEmailDisplay" class="text-sm font-mono font-bold text-blue-400 bg-blue-950/40 px-2.5 py-1 rounded-lg border border-blue-800/40 select-all" dir="ltr">
+            بارگذاری...
+          </code>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="copyCurrentEmail()" class="flex-1 sm:flex-none px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition flex items-center justify-center gap-1.5">
+            <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+            <span id="copyBtnText">کپی آدرس</span>
+          </button>
+          <button onclick="openQrModal()" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition" title="کد QR">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
+          </button>
+          <button onclick="fetchMessages(true)" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition" title="بروزرسانی">
+            <svg id="refreshIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          </button>
+          <button onclick="deleteCurrentInbox()" class="p-2 bg-rose-950/50 hover:bg-rose-900/60 border border-rose-900/50 text-rose-300 rounded-lg transition" title="حذف صندوق">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- بخش لیست پیام‌های دریافتی -->
+    <section class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl shadow-black/40 backdrop-blur-sm min-h-[360px] flex flex-col">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <h2 class="text-sm font-bold text-slate-200">صندوق پیام‌ها</h2>
+          <span id="messagesCountBadge" class="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono">0 پیام</span>
+        </div>
+        <span class="text-xs text-slate-500">بروزرسانی خودکار هر ۵ ثانیه</span>
+      </div>
+
+      <!-- لیست پیام‌ها -->
+      <div id="messagesListContainer" class="flex-1 space-y-2">
+        <!-- حالت پیش‌فرض خالی بودن -->
+        <div id="emptyState" class="flex flex-col items-center justify-center py-16 text-center text-slate-500">
+          <div class="w-14 h-14 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center mb-3 text-slate-600">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+          </div>
+          <p class="text-sm font-medium text-slate-400">صندوق ورودی در انتظار دریافت پیام است</p>
+          <p class="text-xs text-slate-600 mt-1 max-w-sm">ایمیل‌های ارسال‌شده به این آدرس بلافاصله در این بخش ظاهر می‌شوند.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- فوتر -->
+  <footer class="border-t border-slate-900 bg-slate-950/80 py-4 text-center text-xs text-slate-500">
+    <div class="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <span>اجرا شده روی <strong class="text-slate-400">Cloudflare Workers</strong> و <strong class="text-slate-400">GitHub Pages</strong></span>
+      <span>مدت زمان ماندگاری ایمیل‌ها: ۲۴ ساعت</span>
+    </div>
+  </footer>
+
+  <!-- مودال نمایش متن پیام -->
+  <div id="emailDetailModal" class="fixed inset-0 z-50 bg-black/70 modal-backdrop hidden flex items-center justify-center p-3 sm:p-6">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+      <!-- هدر مودال -->
+      <div class="p-4 border-b border-slate-800 flex items-start justify-between gap-4 bg-slate-950/60">
+        <div class="flex-1 min-w-0">
+          <h3 id="modalSubject" class="text-base font-bold text-slate-100 truncate">عنوان ایمیل</h3>
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400 mt-1">
+            <span>فرستنده: <strong id="modalFrom" class="text-slate-300 font-mono" dir="ltr"></strong></span>
+            <span>تاریخ: <span id="modalDate" class="text-slate-400"></span></span>
+          </div>
+        </div>
+        <button onclick="closeModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- تب‌های پیش‌نمایش -->
+      <div class="px-4 py-2 bg-slate-950 border-b border-slate-800/80 flex items-center justify-between">
+        <div class="flex gap-2">
+          <button id="tabHtmlBtn" onclick="switchModalTab('html')" class="px-3 py-1 rounded-md text-xs font-semibold bg-blue-600 text-white transition">نمای HTML</button>
+          <button id="tabTextBtn" onclick="switchModalTab('text')" class="px-3 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 transition">متن ساده</button>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="copyModalContent()" class="text-xs text-slate-400 hover:text-blue-400 transition flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+            کپی متن
+          </button>
+          <button onclick="deleteCurrentModalEmail()" class="text-xs text-rose-400 hover:text-rose-300 transition flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            حذف پیام
+          </button>
+        </div>
+      </div>
+
+      <!-- محتوای پیام -->
+      <div class="flex-1 p-4 overflow-y-auto bg-slate-900/50 min-h-[300px]">
+        <div id="modalHtmlContainer" class="w-full h-full min-h-[320px]">
+          <iframe id="emailIframeSandbox" sandbox="allow-same-origin" class="w-full h-[400px] bg-white rounded-lg border-0 shadow-inner"></iframe>
+        </div>
+        <div id="modalTextContainer" class="hidden">
+          <pre id="modalRawText" class="text-xs font-mono text-slate-300 whitespace-pre-wrap leading-relaxed bg-slate-950 p-4 rounded-xl border border-slate-800 select-text" dir="auto"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- مودال QR Code -->
+  <div id="qrModal" class="fixed inset-0 z-50 bg-black/70 modal-backdrop hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-xs w-full text-center space-y-4">
+      <h3 class="text-sm font-bold text-slate-200">اسکن آدرس ایمیل</h3>
+      <div class="bg-white p-3 rounded-xl inline-block shadow-lg">
+        <img id="qrImage" src="" alt="QR Code" class="w-48 h-48">
+      </div>
+      <p id="qrEmailText" class="text-xs font-mono text-blue-400 break-all"></p>
+      <button onclick="closeQrModal()" class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl text-slate-300 transition">بستن</button>
+    </div>
+  </div>
+
+  <!-- Toast پیام اعلان -->
+  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl shadow-2xl text-xs flex items-center gap-2 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+    <span id="toastText">عملیات با موفقیت انجام شد</span>
+  </div>
+
+  <!-- اسکریپت اصلی -->
+  <script src="./app.js"></script>
+</body>
+</html>

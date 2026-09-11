@@ -1,0 +1,18 @@
+name = "turbo-temp-mail-worker"
+main = "src/index.js"
+compatibility_date = "2024-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# KV Namespace Binding
+# پس از ساخت KV در کلودفلر، id آن را در خط زیر جایگزین کنید:
+# npx wrangler kv:namespace create EMAILS_KV
+[[kv_namespaces]]
+binding = "EMAILS_KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+preview_id = "REPLACE_WITH_YOUR_KV_PREVIEW_ID"
+
+# متغیرهای محیطی
+[vars]
+MAIL_DOMAIN = "yourdomain.com"
+EXTRA_DOMAINS = ""
+EXPIRATION_TTL = "86400" # 24 ساعت به ثانیه

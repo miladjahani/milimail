@@ -1,0 +1,21 @@
+{
+  "name": "turbo-temp-mail-worker",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker backend for Turbo Temp Mail with Email Routing & KV storage",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "keywords": [
+    "cloudflare-worker",
+    "temp-mail",
+    "email-routing",
+    "kv"
+  ],
+  "devDependencies": {
+    "wrangler": "^3.78.0"
+  }
+}

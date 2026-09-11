@@ -1,0 +1,6 @@
+{
+  "mail_domain": "yourdomain.com",
+  "extra_domains": ["mail.yourdomain.com"],
+  "expiration_ttl_seconds": 86400,
+  "worker_api_url": "https://turbo-temp-mail-worker.YOUR_SUBDOMAIN.workers.dev"
+}
